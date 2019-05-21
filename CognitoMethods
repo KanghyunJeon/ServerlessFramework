@@ -1,0 +1,224 @@
+    fun initAmazonMobile() {
+        AWSMobileClient.getInstance().initialize(applicationContext, object : Callback<UserStateDetails> {
+            override fun onResult(userStateDetails: UserStateDetails) {
+                MyLog.e("INIT = onResult: " + userStateDetails.userState)
+
+                when (userStateDetails.userState) {
+                    UserState.SIGNED_IN -> runOnUiThread {
+                        toast("Logged IN")
+                        // 로그인된 상태  메인으로 보내기
+                    }
+                    UserState.SIGNED_OUT -> runOnUiThread {
+                        toast("Logged OUT")
+                        // 로그아웃이 된 상태  로긴창 으로 보내기
+                    }
+                    else -> runOnUiThread{
+                        AWSMobileClient.getInstance().signOut()
+                    }
+                }
+            }
+            override fun onError(e: Exception) {
+                MyLog.e("INIT Initialization error. e=" + e.toString())
+                runOnUiThread{
+                    AWSMobileClient.getInstance().signOut()
+                }
+            }
+        })
+    }
+
+
+
+
+    fun signUp(username:String, password:String, attributes:HashMap<String, String>) {
+        AWSMobileClient.getInstance().signUp(username, password, attributes, null, object : Callback<SignUpResult> {
+            override fun onResult(signUpResult: SignUpResult) {
+                runOnUiThread {
+                    MyLog.e("Sign-up callback state: " + signUpResult.getConfirmationState())
+                    if (!signUpResult.getConfirmationState()) {
+                        toast("Confirm sign-up with: " + signUpResult.getUserCodeDeliveryDetails().getDestination())
+                    } else {
+                        toast("Sign-up done.")
+                    }
+                }
+            }
+
+            override fun onError(e: Exception) {
+                MyLog.e("Sign-up error / e="+e)
+                runOnUiThread {
+                    toast(e.toString())
+                }
+            }
+        })
+    }
+
+    fun resendConfirmCode(username:String) {
+        AWSMobileClient.getInstance().resendSignUp(username, object : Callback<SignUpResult> {
+            override fun onResult(signUpResult: SignUpResult) {
+                MyLog.e("A verification code has been sent via" +
+                            signUpResult.userCodeDeliveryDetails.deliveryMedium
+                            + " at " + signUpResult.userCodeDeliveryDetails.destination )
+            }
+
+            override fun onError(e: Exception) {
+                MyLog.e("e=" +e.toString())
+            }
+        })
+    }
+
+    fun confirmSignupCode(username:String, code:String) {
+        AWSMobileClient.getInstance().confirmSignUp(username, code, object : Callback<SignUpResult> {
+            override fun onResult(signUpResult: SignUpResult) {
+                runOnUiThread {
+                    MyLog.e("Sign-up callback state: " + signUpResult.confirmationState)
+                    if (!signUpResult.confirmationState) {
+                        val details = signUpResult.userCodeDeliveryDetails
+                        toast("Confirm sign-up with: " + details.destination)
+                        MyLog.e("Confirm sign-up with: " + details.destination)
+                    } else {
+                        toast("Sign-up done.")  //인증번호 완료 후 이쪽으로
+                        MyLog.e("Sign-up done.")
+                    }
+                }
+            }
+
+            override fun onError(e: Exception) {
+                MyLog.e("Confirm sign-up error / e=" + e.toString())
+            }
+        })
+    }
+
+    fun signIn(username:String, password:String) {
+        AWSMobileClient.getInstance().signIn(username, password, null, object : Callback<SignInResult> {
+            override fun onResult(signInResult: SignInResult) {
+                runOnUiThread {
+                    MyLog.e("Sign-in callback state: " + signInResult.signInState)
+                    when (signInResult.signInState) {
+                        SignInState.DONE -> toast("Sign-in done.")  //이메일 인증 완료 후 로그인을 하면 이쪽으로 넘어옴
+                        SignInState.SMS_MFA -> toast("Please confirm sign-in with SMS.")
+                        SignInState.NEW_PASSWORD_REQUIRED -> toast("Please confirm sign-in with new password.")
+                        else -> toast("Unsupported sign-in confirmation: " + signInResult.signInState)
+                    }
+                }
+            }
+            override fun onError(e: Exception) {
+                MyLog.e( "Sign-in error / e="+e.toString())
+                runOnUiThread {
+                    toast( "Sign-in error / e="+e.toString())
+                }
+            }
+        })
+    }
+
+    fun signOut() {
+        AWSMobileClient.getInstance()
+            .signOut(SignOutOptions.builder().signOutGlobally(true).build(), object : Callback<Void> {
+                override fun onResult(result: Void) {
+                    MyLog.e("signed-out")
+                }
+
+                override fun onError(e: Exception) {
+                    MyLog.e("sign-out error / e=" +e.toString())
+                }
+            })
+    }
+
+    fun forgotPassword(username:String) {
+        AWSMobileClient.getInstance().forgotPassword(username, object : Callback<ForgotPasswordResult> {    //가입 시 이메일로 코드 날라감
+            override fun onResult(result: ForgotPasswordResult) {
+                runOnUiThread {
+                    MyLog.e("forgot password state: " + result.getState())
+                    when (result.getState()) {
+                        ForgotPasswordState.CONFIRMATION_CODE -> {
+                            toast("Confirmation code is sent to reset password")
+                            MyLog.e("Confirmation code is sent to reset password")
+                        }
+                        else -> MyLog.e("un-supported forgot password state")
+                    }
+                }
+            }
+
+            override fun onError(e: Exception) {
+                MyLog.e("forgot password error / e="+ e)
+            }
+        })
+    }
+
+    fun changePassword(newpassword : String, verifyingCode : String) {
+        AWSMobileClient.getInstance()
+            .confirmForgotPassword(newpassword, verifyingCode, object : Callback<ForgotPasswordResult> {     //forgotPassword 이후에 메일로 코드가 감. 그거랑 신규패스워드 넣고 다시세팅하기
+                override fun onResult(result: ForgotPasswordResult) {
+                    MyLog.e("forgot password state: " + result.state)
+                    runOnUiThread {
+                        when (result.state) {
+                            ForgotPasswordState.DONE -> {
+                                toast("Password changed successfully")
+                                MyLog.e("Password changed successfully")
+                            }
+                            else -> MyLog.e("un-supported forgot password state")
+                        }
+                    }
+                }
+
+                override fun onError(e: Exception) {
+                    MyLog.e("forgot password error / e="+ e)
+                }
+            })
+    }
+
+    fun getUserInfo() {
+        MyLog.e("AWSMobileClient.getInstance().getUsername()="+AWSMobileClient.getInstance().getUsername())       //String
+        MyLog.e("AWSMobileClient.getInstance().isSignedIn()="+AWSMobileClient.getInstance().isSignedIn())       //Boolean
+        MyLog.e("AWSMobileClient.getInstance().getIdentityId()="+AWSMobileClient.getInstance().getIdentityId())       //String
+
+        MyLog.e("AWSMobileClient.getInstance().getTokens()="+AWSMobileClient.getInstance().getTokens())       //OIDC Tokens
+        MyLog.e("AWSMobileClient.getInstance().getTokens().getIdToken().getTokenString()="+AWSMobileClient.getInstance().getTokens().getIdToken().getTokenString())       //OIDC Tokens
+
+        val mPreferenceUtil : PreferenceUtil by inject()
+        mPreferenceUtil.putAccessToken(AWSMobileClient.getInstance().getTokens().getIdToken().getTokenString())    //TODO put access token for Header
+
+        doAsync {
+            MyLog.e("AWSMobileClient.getInstance().getCredentials().awsAccessKeyId="+AWSMobileClient.getInstance().getCredentials().awsAccessKeyId.toString())   //AWS Credentials
+            MyLog.e("AWSMobileClient.getInstance().getCredentials().awsSecretKey="+AWSMobileClient.getInstance().getCredentials().awsSecretKey.toString())   //AWS Credentials
+        }
+    }
+
+    fun getUserAttributes() {
+        AWSMobileClient.getInstance().getUserAttributes(object : Callback<Map<String, String>> {
+            override fun onResult(result: Map<String, String>?) {
+                MyLog.e("getUserAttributes  / result = " + result.toString())
+                MyLog.e("getUserAttributes  / result?.entries = " + result?.keys.toString())
+                MyLog.e("getUserAttributes  / result?.entries = " + result?.entries.toString())
+
+                MyLog.e("-  -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -")
+                MyLog.e("getUserAttributes  / result?.get(\"sub\") = " + result?.get("sub"))
+                MyLog.e("getUserAttributes  / result?.get(\"gender\") = " + result?.get("gender"))
+                MyLog.e("getUserAttributes  / result?.get(\"nickname\") = " + result?.get("nickname"))
+                MyLog.e("getUserAttributes  / result?.get(\"locale\") = " + result?.get("locale"))
+                MyLog.e("getUserAttributes  / result?.get(\"email\") = " + result?.get("email"))
+
+                //TODO UI UPDATE HERE
+            }
+            override fun onError(e: java.lang.Exception?) {
+                MyLog.e( "getUserAttributes / onError ="+ e?.localizedMessage.toString())
+                toast(e?.localizedMessage.toString())
+            }
+        })
+    }
+
+    fun updateUserAttributes(params : MutableMap<String, String>) {
+        AWSMobileClient.getInstance().updateUserAttributes( params , object : Callback<List<UserCodeDeliveryDetails>> {
+            override fun onResult(result: List<UserCodeDeliveryDetails>?) {
+                MyLog.e( "getUserAttributes / result ="+ result.toString())
+                runOnUiThread {
+                    toast("str_success")
+                }
+            }
+
+            override fun onError(e: java.lang.Exception?) {
+                MyLog.e( "getUserAttributes / onError ="+ e?.localizedMessage.toString())
+                runOnUiThread {
+                    toast(e?.localizedMessage.toString())
+                }
+            }
+        })
+    }
